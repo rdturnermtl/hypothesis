@@ -380,8 +380,9 @@ def extract_lambda_source(f):
         source = source[lambda_ast.col_offset :].strip()
 
     source = source[source.index("lambda") :]
-    for i in hrange(len(source), len("lambda"), -1):  # pragma: no branch
-        try:
+    # These lines are in fact covered, but coverage persistently can't tell :/
+    for i in hrange(len(source), len("lambda"), -1):  # pragma: no cover
+        try:  # pragma: no cover
             parsed = ast.parse(source[:i])
             assert len(parsed.body) == 1
             assert parsed.body
