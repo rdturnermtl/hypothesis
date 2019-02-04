@@ -151,7 +151,7 @@ def _tuple_of_arrays(draw, shapes, dtype, elements, unique=False):
     elements : list-like of strategy
         Strategies to fill in array elements on a per argument basis. One can
         also specify a single strategy
-        (e.g., :func:`hypothesis.strategies.floats`)
+        (e.g., :func:`~hypothesis.strategies.floats`)
         and have it applied to all arguments.
     unique : list-like of bool
         Boolean flag to specify if all elements in an array must be unique.
@@ -244,12 +244,11 @@ def _gufunc_arg_shapes(parsed_sig, min_side, max_side):
     }
 
     # Build strategy that draws ints for dimensions and subs them in
-    S = builds(
+    return builds(
         _signature_map,
         map_dict=fixed_dictionaries(dim_map_st),
         parsed_sig=just(parsed_sig),
     )
-    return S
 
 
 def _append_bcast_dims(core_dims, b_dims, set_to_1, n_extra_per_arg):
@@ -390,10 +389,9 @@ def gufunc_arg_shapes(signature, excluded=(), min_side=0, max_side=5, max_dims_e
         *[integers(min_value=0, max_value=mm) for mm in max_extra_per_arg]
     )
 
-    shapes_st = builds(
+    return builds(
         _append_bcast_dims, shapes_st, extra_dims_st, set_to_1_st, extra_per_arg_st
     )
-    return shapes_st
 
 
 def gufunc_args(
@@ -423,7 +421,7 @@ def gufunc_args(
     elements : list
         List of strategies to fill in array elements on a per argument basis.
         One can also specify a single strategy
-        (e.g., :func:`hypothesis.strategies.floats`)
+        (e.g., :func:`~hypothesis.strategies.floats`)
         and have it applied to all arguments.
     unique : list(bool)
         Boolean flag to specify if all elements in an array must be unique.
@@ -480,5 +478,4 @@ def gufunc_args(
         max_side=max_side,
         max_dims_extra=max_dims_extra,
     )
-    S = _tuple_of_arrays(shape_st, dtype=dtype, elements=elements, unique=unique)
-    return S
+    return _tuple_of_arrays(shape_st, dtype=dtype, elements=elements, unique=unique)
