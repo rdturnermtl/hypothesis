@@ -1,19 +1,38 @@
+# This file is part of Hypothesis, which may be found at
+# https://github.com/HypothesisWorks/hypothesis/
+#
+# Most of this work is copyright (C) 2013-2019 David R. MacIver
+# (david@drmaciver.com), but it contains contributions by others. See
+# CONTRIBUTING.rst for a full list of people who may hold copyright, and
+# consult the git log if you need to determine who owns an individual
+# contribution.
+#
+# This Source Code Form is subject to the terms of the Mozilla Public License,
+# v. 2.0. If a copy of the MPL was not distributed with this file, You can
+# obtain one at https://mozilla.org/MPL/2.0/.
+#
+# END HEADER
+
 # This module uses the numpy parser of the Generalized Universal Function API
 # signatures `_parse_gufunc_signature`, which is only available in
 # numpy>=1.12.0 and therefore requires a bump in the requirements for
 # hypothesis.
 from __future__ import absolute_import, division, print_function
 
-from collections import defaultdict
 import string
+from collections import defaultdict
 
 import numpy as np
 import numpy.lib.function_base as npfb
 
 from hypothesis.errors import InvalidArgument
 from hypothesis.extra.numpy import arrays, order_check
-from hypothesis.internal.validation import check_valid_bound, check_valid_interval, check_type
 from hypothesis.internal.compat import integer_types
+from hypothesis.internal.validation import (
+    check_type,
+    check_valid_bound,
+    check_valid_interval,
+)
 from hypothesis.searchstrategy import SearchStrategy
 from hypothesis.strategies import (
     builds,
@@ -47,10 +66,9 @@ parse_gufunc_signature = npfb._parse_gufunc_signature
 
 
 def _weird_digits(ss):
-    '''In Python 3, some weird unicode characters pass `isdigit` but are not
+    """In Python 3, some weird unicode characters pass `isdigit` but are not
     0-9 characters. This function detects those cases.
-    '''
-    # TODO tests
+    """
     weird = set(cc for cc in ss if cc.isdigit() and (cc not in string.digits))
     return weird
 
@@ -228,8 +246,10 @@ def _gufunc_arg_shapes(parsed_sig, min_side, max_side):
 
     """
     assert min_side.default_factory() <= max_side.default_factory()
-    assert all(min_side[kk] <= max_side[kk]
-               for kk in set(min_side.keys()) | set(max_side.keys()))
+    assert all(
+        min_side[kk] <= max_side[kk]
+        for kk in set(min_side.keys()) | set(max_side.keys())
+    )
 
     # Get all dimension names in signature, including numeric constants
     all_dimensions = set([k for arg in parsed_sig for k in arg])
@@ -360,8 +380,10 @@ def gufunc_arg_shapes(signature, excluded=(), min_side=0, max_side=5, max_dims_e
     # Validate that the signature contains digits we can parse
     weird_sig_digits = _weird_digits(signature)
     if len(weird_sig_digits) > 0:
-        raise InvalidArgument('signature %s contains invalid digits: %s' %
-                              (signature, ''.join(weird_sig_digits)))
+        raise InvalidArgument(
+            "signature %s contains invalid digits: %s"
+            % (signature, "".join(weird_sig_digits))
+        )
 
     # Parse out the signature: e.g., parses to [('n', 'm'), ('m', 'p')]
     parsed_sig, _ = parse_gufunc_signature(signature)
