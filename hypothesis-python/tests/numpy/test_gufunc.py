@@ -1,3 +1,5 @@
+# coding=utf-8
+#
 # This file is part of Hypothesis, which may be found at
 # https://github.com/HypothesisWorks/hypothesis/
 #
