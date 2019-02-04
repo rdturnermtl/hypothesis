@@ -26,10 +26,10 @@ from hypothesis.strategies import (
     one_of,
 )
 
-# The spec for a dimension name in numpy.lib.function_base is r'\A\w+\Z' but
-# this creates too many weird corner cases on Python3 unicode. Also make sure
-# doesn't start with digits because if it is parsed as number we could end up
-# with very large dimensions that blow out memory.
+# Use to sample from simple names, we also can sample from npfb._SIGNATURE
+# regex to get all possible signatures. This regex also doesn't start with
+# digits because if it is parsed as number we could end up with very large
+# dimensions that blow out memory.
 VALID_DIM_NAMES = r"\A[a-zA-Z_][a-zA-Z0-9_]*\Z"
 
 _st_shape = lists(integers(min_value=0, max_value=5), min_size=0, max_size=3).map(tuple)

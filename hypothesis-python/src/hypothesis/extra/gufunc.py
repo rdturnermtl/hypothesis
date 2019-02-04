@@ -227,7 +227,9 @@ def _gufunc_arg_shapes(parsed_sig, min_side, max_side):
         list of tuples where each tuple is the shape of an argument.
 
     """
-    # Skipping validation on min and max sides since this function is private.
+    assert min_side.default_factory() <= max_side.default_factory()
+    assert all(min_side[kk] <= max_side[kk]
+               for kk in set(min_side.keys()) | set(max_side.keys()))
 
     # Get all dimension names in signature, including numeric constants
     all_dimensions = set([k for arg in parsed_sig for k in arg])
