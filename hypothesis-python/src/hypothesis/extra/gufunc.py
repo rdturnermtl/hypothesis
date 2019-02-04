@@ -12,7 +12,8 @@ import numpy.lib.function_base as npfb
 
 from hypothesis.errors import InvalidArgument
 from hypothesis.extra.numpy import arrays, order_check
-from hypothesis.internal.validation import check_valid_bound, check_valid_interval
+from hypothesis.internal.validation import check_valid_bound, check_valid_interval, check_type
+from hypothesis.internal.compat import integer_types
 from hypothesis.searchstrategy import SearchStrategy
 from hypothesis.strategies import (
     builds,
@@ -84,18 +85,6 @@ def _order_check_min_max(min_dict, max_dict):
         _check_valid_size_interval(min_dict[kk], max_dict[kk], "side %s" % kk)
 
 
-def _ensure_int(arg, name=""):
-    """Validate input as `int` and return it."""
-    try:
-        x = int(arg)
-        assert arg == x  # e.g., check 5.0 and not 5.5 was passed
-    except Exception:
-        raise InvalidArgument(
-            "%s=%r (type=%s) not representable as int" % (name, arg, type(arg).__name__)
-        )
-    return x
-
-
 def _int_or_dict(x, default_val):
     """Pre-process cases where argument `x` can be `int`, `dict`, or
     `defaultdict`. In all cases, build a `defaultdict` and return it.
@@ -104,14 +93,14 @@ def _int_or_dict(x, default_val):
     if isinstance(x, defaultdict):
         return x
 
-    default_val = _ensure_int(default_val, "default value")
+    check_type(integer_types, default_val, "default value")
     try:
         # case 2: x is or can be converted to dict
         D = defaultdict(lambda: default_val, x)
     except TypeError:
-        # case 3: x is or can be converted to int => make a const dict
-        default_val = _ensure_int(x, "constant value")
-        D = defaultdict(lambda: default_val)
+        # case 3: x is int => make a const dict
+        check_type(integer_types, x, "constant value")
+        D = defaultdict(lambda: x)
     # case 4: if can't be converted to dict or int, then exception raised
     return D
 
@@ -138,7 +127,7 @@ def _arrays(draw, dtype, shape, elements=None, unique=False):
     if isinstance(shape, SearchStrategy):
         shape = draw(shape)
 
-    shape = tuple(_ensure_int(aa) for aa in shape)
+    shape = tuple(int(aa) for aa in shape)
     S = arrays(dtype, shape, elements=elements, unique=unique).map(np.asarray)
     X = draw(S)
     X = X.astype(dtype, copy=False)  # Will never see original => copy=False
@@ -364,7 +353,7 @@ def gufunc_arg_shapes(signature, excluded=(), min_side=0, max_side=5, max_dims_e
     min_side = _int_or_dict(min_side, 0)
     max_side = _int_or_dict(max_side, DEFAULT_MAX_SIDE)
     _order_check_min_max(min_side, max_side)
-    max_dims_extra = _ensure_int(max_dims_extra)
+    check_type(integer_types, max_dims_extra, "extra dims")
     order_check("extra dims", 0, max_dims_extra, GLOBAL_DIMS_MAX)
 
     # Validate that the signature contains digits we can parse
