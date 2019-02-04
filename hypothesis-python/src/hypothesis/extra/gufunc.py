@@ -38,15 +38,16 @@ DEFAULT_MAX_SIDE = 5
 parse_gufunc_signature = npfb._parse_gufunc_signature
 
 
-def weird_digits(ss):
+def _weird_digits(ss):
     '''In Python 3, some weird unicode characters pass `isdigit` but are not
     0-9 characters. This function detects those cases.
     '''
+    # TODO tests
     weird = set(cc for cc in ss if cc.isdigit() and (cc not in string.digits))
     return weird
 
 
-def check_set_like(arg, name=""):
+def _check_set_like(arg, name=""):
     """Validate input can be searched like a `set`."""
     try:
         0 in arg
@@ -57,7 +58,7 @@ def check_set_like(arg, name=""):
         )
 
 
-def check_valid_size_interval(min_size, max_size, name, floor=0):
+def _check_valid_size_interval(min_size, max_size, name, floor=0):
     """Check valid for integers strategy and array shapes."""
     # same checks as done in integers
     check_valid_bound(min_size, name)
@@ -67,16 +68,16 @@ def check_valid_size_interval(min_size, max_size, name, floor=0):
     check_valid_interval(min_size, max_size, "min_size", "max_size")
 
 
-def order_check_min_max(min_dict, max_dict):
+def _order_check_min_max(min_dict, max_dict):
     """Check min and max dict compatible with integers and array shapes."""
-    check_valid_size_interval(
+    _check_valid_size_interval(
         min_dict.default_factory(), max_dict.default_factory(), "side default"
     )
     for kk in set(min_dict.keys()) | set(max_dict.keys()):
-        check_valid_size_interval(min_dict[kk], max_dict[kk], "side %s" % kk)
+        _check_valid_size_interval(min_dict[kk], max_dict[kk], "side %s" % kk)
 
 
-def ensure_int(arg, name=""):
+def _ensure_int(arg, name=""):
     """Validate input as `int` and return it."""
     try:
         x = int(arg)
@@ -96,13 +97,13 @@ def _int_or_dict(x, default_val):
     if isinstance(x, defaultdict):
         return x
 
-    default_val = ensure_int(default_val, "default value")
+    default_val = _ensure_int(default_val, "default value")
     try:
         # case 2: x is or can be converted to dict
         D = defaultdict(lambda: default_val, x)
     except TypeError:
         # case 3: x is or can be converted to int => make a const dict
-        default_val = ensure_int(x, "constant value")
+        default_val = _ensure_int(x, "constant value")
         D = defaultdict(lambda: default_val)
     # case 4: if can't be converted to dict or int, then exception raised
     return D
@@ -130,7 +131,7 @@ def _arrays(draw, dtype, shape, elements=None, unique=False):
     if isinstance(shape, SearchStrategy):
         shape = draw(shape)
 
-    shape = tuple(ensure_int(aa) for aa in shape)
+    shape = tuple(_ensure_int(aa) for aa in shape)
     S = arrays(dtype, shape, elements=elements, unique=unique).map(np.asarray)
     X = draw(S)
     X = X.astype(dtype, copy=False)  # Will never see original => copy=False
@@ -352,15 +353,15 @@ def gufunc_arg_shapes(signature, excluded=(), min_side=0, max_side=5, max_dims_e
       [(11, 13), (1, 1, 1, 13)]
 
     """
-    check_set_like(excluded, name="excluded")
+    _check_set_like(excluded, name="excluded")
     min_side = _int_or_dict(min_side, 0)
     max_side = _int_or_dict(max_side, DEFAULT_MAX_SIDE)
-    order_check_min_max(min_side, max_side)
-    max_dims_extra = ensure_int(max_dims_extra)
+    _order_check_min_max(min_side, max_side)
+    max_dims_extra = _ensure_int(max_dims_extra)
     order_check("extra dims", 0, max_dims_extra, GLOBAL_DIMS_MAX)
 
     # Validate that the signature contains digits we can parse
-    weird_sig_digits = weird_digits(signature)
+    weird_sig_digits = _weird_digits(signature)
     if len(weird_sig_digits) > 0:
         raise InvalidArgument('signature %s contains invalid digits: %s' %
                               (signature, ''.join(weird_sig_digits)))
