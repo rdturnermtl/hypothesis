@@ -34,9 +34,7 @@ BCAST_DIM = object()
 DEFAULT_MAX_SIDE = 5
 
 # This uses "private" function of numpy, but it does the job. It throws a
-# pretty readable exception for invalid input, so we don't need to add anything
-# there. We should also check signature.isascii() since there are lot of weird
-# corner cases with unicode parsing, but isascii() restricts us to Py >=3.7.
+# pretty readable exception for invalid input, we don't need to add anything.
 parse_gufunc_signature = npfb._parse_gufunc_signature
 
 
@@ -237,8 +235,8 @@ def _gufunc_arg_shapes(parsed_sig, min_side, max_side):
     # Get all dimension names in signature, including numeric constants
     all_dimensions = set([k for arg in parsed_sig for k in arg])
 
-    # Note that isdigit can be a bit odd with some unicode characters
-    # => officially only support ascii characters in signature.
+    # Assume we have already checked for weird unicode characters that mess up
+    # isdigit in validation of signature.
     dim_map_st = {
         k: (
             just(int(k))
@@ -311,7 +309,6 @@ def gufunc_arg_shapes(signature, excluded=(), min_side=0, max_side=5, max_dims_e
         Signature for shapes to be compatible with. Expects string in format
         of numpy generalized universal function signature, e.g.,
         `'(m,n),(n)->(m)'` for vectorized matrix-vector multiplication.
-        Officially, only supporting ascii characters on Py3.
     excluded : set(int)
         Set-like of integers representing the positional for which the function
         will not be vectorized. Uses same format as :obj:`numpy.vectorize`.
@@ -421,7 +418,6 @@ def gufunc_args(
         Signature for shapes to be compatible with. Expects string in format
         of numpy generalized universal function signature, e.g.,
         `'(m,n),(n)->(m)'` for vectorized matrix-vector multiplication.
-        Officially, only supporting ascii characters on Py3.
     dtype : list(:class:`numpy:numpy.dtype`)
         List of numpy `dtype` for each argument. These can be either strings
         (``'int64'``), type (``np.int64``), or numpy `dtype`
