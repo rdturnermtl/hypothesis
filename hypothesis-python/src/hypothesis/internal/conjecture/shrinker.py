@@ -18,7 +18,7 @@
 from __future__ import absolute_import, division, print_function
 
 import heapq
-from collections import Counter
+from collections import Counter, defaultdict
 from enum import Enum
 from functools import total_ordering
 
@@ -31,13 +31,7 @@ from hypothesis.internal.conjecture.floats import (
     float_to_lex,
     lex_to_float,
 )
-from hypothesis.internal.conjecture.shrinking import (
-    Float,
-    Integer,
-    Length,
-    Lexical,
-    Ordering,
-)
+from hypothesis.internal.conjecture.shrinking import Float, Integer, Lexical, Ordering
 from hypothesis.internal.conjecture.shrinking.common import find_integer
 
 
@@ -138,10 +132,9 @@ class Shrinker(object):
     are carefully designed to do the right thing in the case that no
     shrinks occurred and try to adapt to any changes to do a reasonable
     job. e.g. say we wanted to write a shrink pass that tried deleting
-    each individual byte (this isn't an especially good choice and if
-    we did we should use :class:`hypothesis.internal.conjecture.shrinking.Length`
-    to do it anyway, but it leads to a simple illustrative example),
-    we might do it by iterating over the buffer like so:
+    each individual byte (this isn't an especially good choice,
+    but it leads to a simple illustrative example), we might do it
+    by iterating over the buffer like so:
 
     .. code-block:: python
 
@@ -181,11 +174,7 @@ class Shrinker(object):
       reasonably large proportion of the operations suceed, this
       guarantees the expected stall length is quite short. The
       book keeping for making sure this does the right thing when
-      it succeeds can be quite annoying. If you want this approach
-      it may be useful to see if you can build it on top of
-      :class:`~hypothesis.internal.conjecture.shrinking.Length`,
-      which already does the right book keeping for you (as well
-      as the adaptive logic below).
+      it succeeds can be quite annoying.
     * When you have any sort of nested loop, loop in such a way
       that both loop variables change each time. This prevents
       stalls which occur when one particular value for the outer
@@ -245,9 +234,24 @@ class Shrinker(object):
             block_program("-XX"),
             block_program("XX"),
             "example_deletion_with_block_lowering",
-            "shrink_offset_pairs",
-            "minimize_block_pairs_retaining_sum",
         ]
+
+    def derived_value(fn):
+        """It's useful during shrinking to have access to derived values of
+        the current shrink target.
+
+        This decorator allows you to define these as cached properties. They
+        are calculated once, then cached until the shrink target changes, then
+        recalculated the next time they are used."""
+
+        def accept(self):
+            try:
+                return self.__derived_values[fn.__name__]
+            except KeyError:
+                return self.__derived_values.setdefault(fn.__name__, fn(self))
+
+        accept.__name__ = fn.__name__
+        return property(accept)
 
     def __init__(self, engine, initial, predicate):
         """Create a shrinker for a particular engine, with a given starting
@@ -262,6 +266,7 @@ class Shrinker(object):
         self.__predicate = predicate
         self.discarding_failed = False
         self.__shrinking_prefixes = set()
+        self.__derived_values = {}
 
         self.initial_size = len(initial.buffer)
 
@@ -668,37 +673,12 @@ class Shrinker(object):
     def blocks(self):
         return self.shrink_target.blocks
 
+    @property
+    def examples(self):
+        return self.shrink_target.examples
+
     def all_block_bounds(self):
         return self.shrink_target.all_block_bounds()
-
-    def each_pair_of_blocks(self, accept_first, accept_second):
-        """Yield each pair of blocks ``(a, b)``, such that ``a.index <
-        b.index``, but only if ``accept_first(a)`` and ``accept_second(b)`` are
-        both true."""
-
-        # Iteration order here is significant: Rather than fixing i and looping
-        # over each j, then doing the same, etc. we iterate over the gap between
-        # i and j and then over i. The reason for this is that it ensures that
-        # we try a different value for i and j on each iteration of the inner
-        # loop. This stops us from stalling if we happen to hit on a value of i
-        # where nothing useful can be done.
-        #
-        # In the event that nothing works, this doesn't help and we still make
-        # the same number of calls, but by ensuring that we make progress we
-        # have more opportunities to make shrinks that speed up the tests or
-        # that reduce the number of viable shrinks at the next gap size because
-        # we've lowered some values.
-        offset = 1
-        while offset < len(self.blocks):
-            i = 0
-            while i + offset < len(self.blocks):
-                j = i + offset
-                block_i = self.blocks[i]
-                block_j = self.blocks[j]
-                if accept_first(block_i) and accept_second(block_j):
-                    yield (block_i, block_j)
-                i += 1
-            offset += 1
 
     def pass_to_descendant(self):
         """Attempt to replace each example with a descendant example.
@@ -756,18 +736,6 @@ class Shrinker(object):
         return self.__shrinking_block_cache.setdefault(
             i, t.buffer[: t.blocks[i].start] in self.__shrinking_prefixes
         )
-
-    def is_payload_block(self, i):
-        """A block is payload if it is entirely non-structural: We can tinker
-        with its value freely and this will not affect the shape of the input
-        language.
-
-        This is mostly a useful concept when we're doing lexicographic
-        minimimization on multiple blocks at once - by restricting ourself to
-        payload blocks, we expect the shape of the language to not change
-        under us (but must still guard against it doing so).
-        """
-        return not (self.is_shrinking_block(i) or self.shrink_target.blocks[i].forced)
 
     def lower_common_block_offset(self):
         """Sometimes we find ourselves in a situation where changes to one part
@@ -835,70 +803,6 @@ class Shrinker(object):
         if new_offset == offset:
             self.clear_change_tracking()
 
-    def shrink_offset_pairs(self):
-        """Lowers pairs of blocks that need to maintain a constant difference
-        between their respective values.
-
-        Before this shrink pass, two blocks explicitly offset from each
-        other would not get minimized properly:
-         >>> b = st.integers(0, 255)
-         >>> find(st.tuples(b, b), lambda x: x[0] == x[1] + 1)
-        (149,148)
-
-        This expensive (O(n^2)) pass goes through every pair of non-zero
-        blocks in the current shrink target and sees if the shrink
-        target can be improved by applying a negative offset to both of them.
-        """
-
-        def int_from_block(i):
-            u, v = self.blocks[i].bounds
-            block_bytes = self.shrink_target.buffer[u:v]
-            return int_from_bytes(block_bytes)
-
-        def block_len(i):
-            return self.blocks[i].length
-
-        # Try reoffseting every pair
-        def reoffset_pair(pair, o):
-            n = len(self.blocks)
-            # Number of blocks may have changed, need to validate
-            valid_pair = [
-                p
-                for p in pair
-                if p < n and int_from_block(p) > 0 and self.is_payload_block(p)
-            ]
-
-            if len(valid_pair) < 2:
-                return
-
-            m = min([int_from_block(p) for p in valid_pair])
-
-            new_blocks = [
-                self.shrink_target.buffer[u:v]
-                for u, v in self.shrink_target.all_block_bounds()
-            ]
-            for i in valid_pair:
-                new_blocks[i] = int_to_bytes(int_from_block(i) + o - m, block_len(i))
-            buffer = hbytes().join(new_blocks)
-            return self.incorporate_new_buffer(buffer)
-
-        def is_non_zero_payload(block):
-            return not block.all_zero and self.is_payload_block(block.index)
-
-        for block_i, block_j in self.each_pair_of_blocks(
-            is_non_zero_payload, is_non_zero_payload
-        ):
-            i = block_i.index
-            j = block_j.index
-
-            value_i = int_from_block(i)
-            value_j = int_from_block(j)
-
-            offset = min(value_i, value_j)
-            Integer.shrink(
-                offset, lambda o: reoffset_pair((i, j), o), random=self.random
-            )
-
     def mark_shrinking(self, blocks):
         """Mark each of these blocks as a shrinking block: That is, lowering
         its value lexicographically may cause less data to be drawn after."""
@@ -938,6 +842,7 @@ class Shrinker(object):
 
         self.shrink_target = new_target
         self.__shrinking_block_cache = {}
+        self.__derived_values = {}
 
     def try_shrinking_blocks(self, blocks, b):
         """Attempts to replace each block in the blocks list with b. Returns
@@ -960,7 +865,7 @@ class Shrinker(object):
                 blocks = blocks[:i]
                 break
             u, v = self.blocks[block].bounds
-            n = min(v - u, len(b))
+            n = min(self.blocks[block].length, len(b))
             initial_attempt[v - n : v] = b[-n:]
 
         start = self.shrink_target.blocks[blocks[0]].start
@@ -1130,21 +1035,65 @@ class Shrinker(object):
                 **kwargs
             )
 
+    @derived_value
+    def endpoints_by_depth(self):
+        """Defines a series of increasingly fine grained boundaries
+        to partition the current buffer, based on the depth of examples.
+        Each element of the result is the set of endpoints of examples
+        less than or equal to some depth (less than or equal to account
+        for the fact that there might be blocks below that depth and if
+        we ignore those we'll get bad boundaries).
+
+        This is primarily useful for adaptive_example_deletion."""
+        endpoints_at_depth = defaultdict(set)
+        max_depth = 0
+        for ex in self.examples:
+            endpoints_at_depth[ex.depth].add(ex.start)
+            endpoints_at_depth[ex.depth].add(ex.end)
+            max_depth = max(max_depth, ex.depth)
+        distinct_partitions = [{0, len(self.buffer)}]
+        for d in hrange(max_depth + 1):
+            prev = distinct_partitions[-1]
+            if not endpoints_at_depth[d].issubset(prev):
+                distinct_partitions.append(prev | endpoints_at_depth[d])
+        return [sorted(endpoints) for endpoints in distinct_partitions[1:]]
+
     def adaptive_example_deletion(self):
-        """Recursive deletion pass that tries to make the example located at
-        example_index as small as possible. This is the main point at which we
-        try to lower the size of the data.
+        """Attempts to delete every example from the test case.
 
-        First attempts to replace the example with its minimal possible version
-        using zero_example. If the example is trivial (either because of that
-        or because it was anyway) then we assume there's nothing we can
-        usefully do here and return early. Otherwise, we attempt to minimize it
-        by deleting its children.
-
-        If we do not make any successful changes, we recurse to the example's
-        children and attempt the same there.
+        That is, it is logically equivalent to trying ``self.buffer[:ex.start] +
+        self.buffer[ex.end:]`` for every example ``ex``. The order in which
+        examples are tried is randomized, and when deletion is successful it
+        will attempt to adapt to delete more than one example at a time.
         """
-        self.example_wise_shrink(Length)
+        indices = [
+            (i, j)
+            for i, ls in enumerate(self.endpoints_by_depth)
+            for j in hrange(len(ls))
+        ]
+        self.random.shuffle(indices)
+
+        for i, j in indices:
+            if i >= len(self.endpoints_by_depth):
+                continue
+            partition = self.endpoints_by_depth[i]
+            # No point in trying to delete the last element because that will always
+            # give us a prefix.
+            if j >= len(partition) - 1:
+                continue
+
+            def delete_region(a, b):
+                assert a <= j <= b
+                if a < 0 or b >= len(partition) - 1:
+                    return False
+                return self.consider_new_buffer(
+                    self.buffer[: partition[a]] + self.buffer[partition[b] :]
+                )
+
+            to_right = find_integer(lambda n: delete_region(j, j + n))
+
+            if to_right > 0:
+                find_integer(lambda n: delete_region(j - n, j + to_right))
 
     def zero_examples(self):
         """Attempt to replace each example with a minimal version of itself."""
@@ -1327,60 +1276,6 @@ class Shrinker(object):
 
             i += 1
 
-    def minimize_block_pairs_retaining_sum(self):
-        """This pass minimizes pairs of blocks subject to the constraint that
-        their sum when interpreted as integers remains the same. This allow us
-        to normalize a number of examples that we would otherwise struggle on.
-        e.g. consider the following:
-
-        m = data.draw_bits(8)
-        n = data.draw_bits(8)
-        if m + n >= 256:
-            data.mark_interesting()
-
-        The ideal example for this is m=1, n=255, but we will almost never
-        find that without a pass like this - we would only do so if we
-        happened to draw n=255 by chance.
-
-        This kind of scenario comes up reasonably often in the context of e.g.
-        triggering overflow behaviour.
-        """
-        for block_i, block_j in self.each_pair_of_blocks(
-            lambda block: (self.is_payload_block(block.index) and not block.all_zero),
-            lambda block: self.is_payload_block(block.index),
-        ):
-            if block_i.length != block_j.length:
-                continue
-
-            u, v = block_i.bounds
-            r, s = block_j.bounds
-
-            m = int_from_bytes(self.shrink_target.buffer[u:v])
-            n = int_from_bytes(self.shrink_target.buffer[r:s])
-
-            def trial(x, y):
-                if s > len(self.shrink_target.buffer):
-                    return False
-                attempt = bytearray(self.shrink_target.buffer)
-                try:
-                    attempt[u:v] = int_to_bytes(x, v - u)
-                    attempt[r:s] = int_to_bytes(y, s - r)
-                except OverflowError:
-                    return False
-                return self.incorporate_new_buffer(attempt)
-
-            # We first attempt to move 1 from m to n. If that works
-            # then we treat that as a sign that it's worth trying
-            # a more expensive minimization. But if m was already 1
-            # (we know it's > 0) then there's no point continuing
-            # because the value there is now zero.
-            if trial(m - 1, n + 1) and m > 1:
-                m = int_from_bytes(self.shrink_target.buffer[u:v])
-                n = int_from_bytes(self.shrink_target.buffer[r:s])
-
-                tot = m + n
-                Integer.shrink(m, lambda x: trial(x, tot - x), random=self.random)
-
     def reorder_examples(self):
         """This pass allows us to reorder the children of each example.
 
@@ -1508,14 +1403,15 @@ def block_program(description):
             failed = False
             for k, d in reversed(list(enumerate(description))):
                 j = i + k
-                u, v = self.blocks[j].bounds
+                block = self.blocks[j]
+                u, v = block.bounds
                 if d == "-":
                     value = int_from_bytes(attempt[u:v])
                     if value == 0:
                         failed = True
                         break
                     else:
-                        attempt[u:v] = int_to_bytes(value - 1, v - u)
+                        attempt[u:v] = int_to_bytes(value - 1, block.length)
                 elif d == "X":
                     del attempt[u:v]
                 else:  # pragma: no cover
