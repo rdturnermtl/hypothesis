@@ -11,10 +11,7 @@ import numpy.lib.function_base as npfb
 
 from hypothesis.errors import InvalidArgument
 from hypothesis.extra.numpy import arrays, order_check
-from hypothesis.internal.validation import (
-    check_valid_bound,
-    check_valid_interval,
-)
+from hypothesis.internal.validation import check_valid_bound, check_valid_interval
 from hypothesis.searchstrategy import SearchStrategy
 from hypothesis.strategies import (
     builds,
@@ -47,8 +44,10 @@ def check_set_like(arg, name=""):
     try:
         0 in arg
     except TypeError:
-        raise InvalidArgument("Expected set-like but got %s=%r (type=%s)"
-                              % (name, arg, type(arg).__name__))
+        raise InvalidArgument(
+            "Expected set-like but got %s=%r (type=%s)"
+            % (name, arg, type(arg).__name__)
+        )
 
 
 def check_valid_size_interval(min_size, max_size, name, floor=0):
@@ -58,14 +57,15 @@ def check_valid_size_interval(min_size, max_size, name, floor=0):
     check_valid_bound(max_size, name)
     order_check(name, floor, min_size, max_size)  # ensure non-none & above 0
     # this is also done in integers, so check for good measure
-    check_valid_interval(min_size, max_size, 'min_size', 'max_size')
+    check_valid_interval(min_size, max_size, "min_size", "max_size")
 
 
 def order_check_min_max(min_dict, max_dict):
     """Check min and max dict compatible with integers and array shapes."""
-    check_valid_size_interval(min_dict.default_factory(),
-                              max_dict.default_factory(), "side default")
-    for kk in (set(min_dict.keys()) | set(max_dict.keys())):
+    check_valid_size_interval(
+        min_dict.default_factory(), max_dict.default_factory(), "side default"
+    )
+    for kk in set(min_dict.keys()) | set(max_dict.keys()):
         check_valid_size_interval(min_dict[kk], max_dict[kk], "side %s" % kk)
 
 
@@ -75,8 +75,9 @@ def ensure_int(arg, name=""):
         x = int(arg)
         assert arg == x  # e.g., check 5.0 and not 5.5 was passed
     except Exception:
-        raise InvalidArgument("%s=%r (type=%s) not representable as int"
-                              % (name, arg, type(arg).__name__))
+        raise InvalidArgument(
+            "%s=%r (type=%s) not representable as int" % (name, arg, type(arg).__name__)
+        )
     return x
 
 
@@ -173,8 +174,10 @@ def _tuple_of_arrays(draw, shapes, dtype, elements, unique=False):
     # This could somewhat easily be done using builds and avoid need for
     # composite if shape is always given and not strategy. Otherwise, we need
     # to chain strategies and probably not worth the effort.
-    res = tuple(draw(_arrays(dd, ss, elements=ee, unique=uu))
-                for dd, ss, ee, uu in zip(dtype, shapes, elements, unique))
+    res = tuple(
+        draw(_arrays(dd, ss, elements=ee, unique=uu))
+        for dd, ss, ee, uu in zip(dtype, shapes, elements, unique)
+    )
     return res
 
 
@@ -227,14 +230,21 @@ def _gufunc_arg_shapes(parsed_sig, min_side, max_side):
 
     # Note that isdigit can be a bit odd with some unicode characters
     # => officially only support ascii characters in signature.
-    dim_map_st = {k: (just(int(k)) if k.isdigit() else
-                      integers(min_value=min_side[k], max_value=max_side[k]))
-                  for k in all_dimensions}
+    dim_map_st = {
+        k: (
+            just(int(k))
+            if k.isdigit()
+            else integers(min_value=min_side[k], max_value=max_side[k])
+        )
+        for k in all_dimensions
+    }
 
     # Build strategy that draws ints for dimensions and subs them in
-    S = builds(_signature_map,
-               map_dict=fixed_dictionaries(dim_map_st),
-               parsed_sig=just(parsed_sig))
+    S = builds(
+        _signature_map,
+        map_dict=fixed_dictionaries(dim_map_st),
+        parsed_sig=just(parsed_sig),
+    )
     return S
 
 
@@ -275,13 +285,14 @@ def _append_bcast_dims(core_dims, b_dims, set_to_1, n_extra_per_arg):
     # We use pp[len(pp) - nn:] instead of pp[-nn:] since that doesn't handle
     # corner case with nn=0 correctly (seems like an oversight of py slicing).
     # Call tolist() before tuple to ensure native int type.
-    shapes = [tuple(pp[len(pp) - nn:].tolist()) + ss
-              for ss, pp, nn in zip(core_dims, extra_dims, n_extra_per_arg)]
+    shapes = [
+        tuple(pp[len(pp) - nn :].tolist()) + ss
+        for ss, pp, nn in zip(core_dims, extra_dims, n_extra_per_arg)
+    ]
     return shapes
 
 
-def gufunc_arg_shapes(signature, excluded=(),
-                      min_side=0, max_side=5, max_dims_extra=0):
+def gufunc_arg_shapes(signature, excluded=(), min_side=0, max_side=5, max_dims_extra=0):
     """Strategy to generate the shape of ndarrays for arguments to a function
     consistent with its signature with extra dimensions to test broadcasting.
 
@@ -346,8 +357,7 @@ def gufunc_arg_shapes(signature, excluded=(),
     parsed_sig, _ = parse_gufunc_signature(signature)
 
     # Get core shapes before broadcasted dimensions
-    shapes_st = _gufunc_arg_shapes(parsed_sig,
-                                   min_side=min_side, max_side=max_side)
+    shapes_st = _gufunc_arg_shapes(parsed_sig, min_side=min_side, max_side=max_side)
 
     # Skip this bast craziness if we don't want extra dims:
     if max_dims_extra == 0:
@@ -355,26 +365,38 @@ def gufunc_arg_shapes(signature, excluded=(),
 
     # We could use tuples instead without creating type ambiguity since
     # max_dims_extra > 0 and avoid calling arrays, but prob ok like this.
-    bcast_dim_st = integers(min_value=min_side[BCAST_DIM],
-                            max_value=max_side[BCAST_DIM])
+    bcast_dim_st = integers(
+        min_value=min_side[BCAST_DIM], max_value=max_side[BCAST_DIM]
+    )
     extra_dims_st = _arrays(np.intp, (max_dims_extra,), elements=bcast_dim_st)
 
     set_to_1_st = _arrays(np.bool_, (len(parsed_sig), max_dims_extra))
 
     # np.clip will convert to np int but we don't really care.
-    max_extra_per_arg = [0 if nn in excluded else
-                         np.clip(GLOBAL_DIMS_MAX - len(ss), 0, max_dims_extra)
-                         for nn, ss in enumerate(parsed_sig)]
-    extra_per_arg_st = tuples(*[integers(min_value=0, max_value=mm)
-                                for mm in max_extra_per_arg])
+    max_extra_per_arg = [
+        0 if nn in excluded else np.clip(GLOBAL_DIMS_MAX - len(ss), 0, max_dims_extra)
+        for nn, ss in enumerate(parsed_sig)
+    ]
+    extra_per_arg_st = tuples(
+        *[integers(min_value=0, max_value=mm) for mm in max_extra_per_arg]
+    )
 
-    shapes_st = builds(_append_bcast_dims,
-                       shapes_st, extra_dims_st, set_to_1_st, extra_per_arg_st)
+    shapes_st = builds(
+        _append_bcast_dims, shapes_st, extra_dims_st, set_to_1_st, extra_per_arg_st
+    )
     return shapes_st
 
 
-def gufunc_args(signature, dtype, elements, unique=False, excluded=(),
-                min_side=0, max_side=5, max_dims_extra=0):
+def gufunc_args(
+    signature,
+    dtype,
+    elements,
+    unique=False,
+    excluded=(),
+    min_side=0,
+    max_side=5,
+    max_dims_extra=0,
+):
     """Strategy to generate a tuple of ndarrays for arguments to a function
     consistent with its signature with extra dimensions to test broadcasting.
 
@@ -443,9 +465,12 @@ def gufunc_args(signature, dtype, elements, unique=False, excluded=(),
        array([67, 43,  0, 34, 66], dtype=int32))
 
     """
-    shape_st = gufunc_arg_shapes(signature, excluded=excluded,
-                                 min_side=min_side, max_side=max_side,
-                                 max_dims_extra=max_dims_extra)
-    S = _tuple_of_arrays(shape_st,
-                         dtype=dtype, elements=elements, unique=unique)
+    shape_st = gufunc_arg_shapes(
+        signature,
+        excluded=excluded,
+        min_side=min_side,
+        max_side=max_side,
+        max_dims_extra=max_dims_extra,
+    )
+    S = _tuple_of_arrays(shape_st, dtype=dtype, elements=elements, unique=unique)
     return S

@@ -31,8 +31,7 @@ from hypothesis.strategies import (
 # with very large dimensions that blow out memory.
 VALID_DIM_NAMES = r"\A[a-zA-Z_][a-zA-Z0-9_]*\Z"
 
-_st_shape = lists(integers(min_value=0, max_value=5),
-                  min_size=0, max_size=3).map(tuple)
+_st_shape = lists(integers(min_value=0, max_value=5), min_size=0, max_size=3).map(tuple)
 
 
 def identity(x):
@@ -74,46 +73,54 @@ def validate_shapes(L, parsed_sig, min_side, max_side):
             if ss.isdigit():
                 assert int(ss) == dd
             else:
-                mm = min_side.get(ss, 0) if isinstance(min_side, dict) \
-                    else min_side
+                mm = min_side.get(ss, 0) if isinstance(min_side, dict) else min_side
                 assert mm <= dd
-                mm = max_side.get(ss, gu.DEFAULT_MAX_SIDE) \
-                    if isinstance(max_side, dict) else max_side
+                mm = (
+                    max_side.get(ss, gu.DEFAULT_MAX_SIDE)
+                    if isinstance(max_side, dict)
+                    else max_side
+                )
                 assert dd <= mm
                 var_size = size_lookup.setdefault(ss, dd)
                 assert var_size == dd
 
 
-def validate_bcast_shapes(shapes, parsed_sig, excluded,
-                          min_side, max_side, max_dims_extra):
+def validate_bcast_shapes(
+    shapes, parsed_sig, excluded, min_side, max_side, max_dims_extra
+):
     # Ok to be above GLOBAL_DIMS_MAX if core dims are too
-    assert all(len(ss) <= gu.GLOBAL_DIMS_MAX or len(ss) == len(pp)
-               for ss, pp in zip(shapes, parsed_sig))
+    assert all(
+        len(ss) <= gu.GLOBAL_DIMS_MAX or len(ss) == len(pp)
+        for ss, pp in zip(shapes, parsed_sig)
+    )
 
     assert type(shapes) is list
     assert all(type(ss) is tuple for ss in shapes)
     assert all(all(type(v) is int for v in ss) for ss in shapes)
 
-    assert all((ii not in excluded) or len(ss) == len(pp)
-               for ii, (ss, pp) in enumerate(zip(shapes, parsed_sig)))
+    assert all(
+        (ii not in excluded) or len(ss) == len(pp)
+        for ii, (ss, pp) in enumerate(zip(shapes, parsed_sig))
+    )
 
     # chop off extra dims then same as gufunc_shape
-    core_dims = [tt[len(tt) - len(pp):] for tt, pp in zip(shapes, parsed_sig)]
+    core_dims = [tt[len(tt) - len(pp) :] for tt, pp in zip(shapes, parsed_sig)]
     validate_shapes(core_dims, parsed_sig, min_side, max_side)
 
     # check max_dims_extra
-    b_dims = [tt[:len(tt) - len(pp)] for tt, pp in zip(shapes, parsed_sig)]
+    b_dims = [tt[: len(tt) - len(pp)] for tt, pp in zip(shapes, parsed_sig)]
     assert all(len(tt) <= max_dims_extra for tt in b_dims)
 
     # Convert dims to matrix form
-    b_dims2 = np.array([pad_left(bb, max_dims_extra, 1) for bb in b_dims],
-                       dtype=int)
+    b_dims2 = np.array([pad_left(bb, max_dims_extra, 1) for bb in b_dims], dtype=int)
     # The extra broadcast dims be set to one regardless of min, max sides
-    mm = min_side.get(gu.BCAST_DIM, 0) \
-        if isinstance(min_side, dict) else min_side
+    mm = min_side.get(gu.BCAST_DIM, 0) if isinstance(min_side, dict) else min_side
     assert np.all((b_dims2 == 1) | (mm <= b_dims2))
-    mm = max_side.get(gu.BCAST_DIM, gu.DEFAULT_MAX_SIDE) \
-        if isinstance(max_side, dict) else max_side
+    mm = (
+        max_side.get(gu.BCAST_DIM, gu.DEFAULT_MAX_SIDE)
+        if isinstance(max_side, dict)
+        else max_side
+    )
     assert np.all((b_dims2 == 1) | (b_dims2 <= mm))
     # make sure 1 or same
     for ii in range(max_dims_extra):
@@ -158,6 +165,7 @@ def real_from_dtype(dtype, N=10):
         x = np.nan_to_num(x).astype(dtype)
         assert x.dtype == dtype  # hard to always get this it seems
         return x
+
     S = lists(from_dtype(dtype), min_size=N, max_size=N).map(clean_up)
     return S
 
@@ -171,8 +179,11 @@ def parsed_sigs(big=False):
     max_dims = 3
     max_args = 5
     # Use | to sample from digits since we would like (small) pure numbers too
-    shapes = lists(from_regex(VALID_DIM_NAMES) | sampled_from(string.digits),
-                   min_size=0, max_size=max_dims).map(tuple)
+    shapes = lists(
+        from_regex(VALID_DIM_NAMES) | sampled_from(string.digits),
+        min_size=0,
+        max_size=max_dims,
+    ).map(tuple)
     S = lists(shapes, min_size=1, max_size=max_args)
     S = tuples(S, S)
 
@@ -202,14 +213,16 @@ def parsed_sigs_and_sizes(draw, big=False):
     split = draw(integers(min_min_side, gu.DEFAULT_MAX_SIDE))
 
     if draw(booleans()):
-        min_side = draw(dictionaries(sampled_from(labels),
-                                     integers(min_min_side, split)))
+        min_side = draw(
+            dictionaries(sampled_from(labels), integers(min_min_side, split))
+        )
     else:
         min_side = draw(integers(min_min_side, split))
 
     if draw(booleans()):
-        max_side = draw(dictionaries(sampled_from(labels),
-                                     integers(split, max_max_side)))
+        max_side = draw(
+            dictionaries(sampled_from(labels), integers(split, max_max_side))
+        )
     else:
         max_side = draw(integers(split, max_max_side))
 
@@ -230,8 +243,7 @@ def test_unparse_parse(sig):
     assert o_parsed_sig == out
 
 
-@given(dictionaries(from_regex(VALID_DIM_NAMES), integers()),
-       integers(), integers())
+@given(dictionaries(from_regex(VALID_DIM_NAMES), integers()), integers(), integers())
 def test_ddict_int_or_dict(D, default_val, default_val2):
     DD = defaultdict(lambda: default_val, D)
 
@@ -248,7 +260,7 @@ def test_dict_int_or_dict(D, default_val):
     DD = gu._int_or_dict(D, default_val)
 
     assert DD == D
-    assert DD['---'] == default_val
+    assert DD["---"] == default_val
 
 
 @given(integers(), integers())
@@ -256,7 +268,7 @@ def test_int_int_or_dict(default_val, default_val2):
     DD = gu._int_or_dict(default_val, default_val2)
 
     assert len(DD) == 0
-    assert DD['---'] == default_val
+    assert DD["---"] == default_val
 
 
 @given(real_scalar_dtypes(), _st_shape, data())
@@ -292,8 +304,9 @@ def test_just_arrays(dtype, shape, data):
 
 # hypothesis.extra.numpy.array_shapes does not support 0 min_size so we roll
 # our own in this case.
-@given(lists(_st_shape, min_size=0, max_size=5),
-       real_scalar_dtypes(), booleans(), data())
+@given(
+    lists(_st_shape, min_size=0, max_size=5), real_scalar_dtypes(), booleans(), data()
+)
 def test_shapes_tuple_of_arrays(shapes, dtype, unique, data):
     elements = from_dtype(np.dtype(dtype))
 
@@ -309,14 +322,16 @@ def test_shapes_tuple_of_arrays(shapes, dtype, unique, data):
 
 # hypothesis.extra.numpy.array_shapes does not support 0 min_size so we roll
 # our own in this case.
-@given(lists(_st_shape, min_size=0, max_size=5),
-       real_scalar_dtypes(), booleans(), data())
+@given(
+    lists(_st_shape, min_size=0, max_size=5), real_scalar_dtypes(), booleans(), data()
+)
 def test_just_shapes_tuple_of_arrays(shapes, dtype, unique, data):
     elements = from_dtype(np.dtype(dtype))
 
     # test again, but this time pass in strategy to make sure it can handle it
-    S = gu._tuple_of_arrays(just(shapes), just(dtype),
-                            elements=elements, unique=just(unique))
+    S = gu._tuple_of_arrays(
+        just(shapes), just(dtype), elements=elements, unique=just(unique)
+    )
     X = data.draw(S)
 
     validate_elements(X, dtype=dtype, unique=unique)
@@ -337,11 +352,16 @@ def test_elements_tuple_of_arrays(shapes, dtype, data):
     validate_elements(X, choices=choices, dtype=dtype)
 
 
-@given(gu.gufunc_args('(1),(1),(1),()->()',
-                      dtype=['object', 'object', 'object', 'bool'],
-                      elements=[_st_shape,
-                                scalar_dtypes(), just(None), booleans()],
-                      min_side=1, max_dims_extra=1), data())
+@given(
+    gu.gufunc_args(
+        "(1),(1),(1),()->()",
+        dtype=["object", "object", "object", "bool"],
+        elements=[_st_shape, scalar_dtypes(), just(None), booleans()],
+        min_side=1,
+        max_dims_extra=1,
+    ),
+    data(),
+)
 def test_bcast_tuple_of_arrays(args, data):
     """Now testing broadcasting of tuple_of_arrays, kind of crazy since it uses
     gufuncs to test itself. Some awkwardness here since there are a lot of
@@ -420,15 +440,13 @@ def test_shapes_gufunc_arg_shapes(parsed_sig_and_size, data):
     min_side = gu._int_or_dict(min_side, 0)
     max_side = gu._int_or_dict(max_side, gu.DEFAULT_MAX_SIDE)
 
-    S = gu._gufunc_arg_shapes(parsed_sig[0],
-                              min_side=min_side, max_side=max_side)
+    S = gu._gufunc_arg_shapes(parsed_sig[0], min_side=min_side, max_side=max_side)
 
     shapes = data.draw(S)
     validate_shapes(shapes, parsed_sig[0], min_side, max_side)
 
 
-@given(parsed_sigs_and_sizes(big=False),
-       real_scalar_dtypes(), booleans(), data())
+@given(parsed_sigs_and_sizes(big=False), real_scalar_dtypes(), booleans(), data())
 def test_shapes_gufunc_args(parsed_sig_and_size, dtype, unique, data):
     parsed_sig, min_side, max_side = parsed_sig_and_size
 
@@ -439,8 +457,14 @@ def test_shapes_gufunc_args(parsed_sig_and_size, dtype, unique, data):
     elements = from_dtype(np.dtype(dtype))
 
     # Assumes zero broadcast dims by default
-    S = gu.gufunc_args(signature, min_side=min_side, max_side=max_side,
-                       dtype=dtype, elements=elements, unique=unique)
+    S = gu.gufunc_args(
+        signature,
+        min_side=min_side,
+        max_side=max_side,
+        dtype=dtype,
+        elements=elements,
+        unique=unique,
+    )
 
     X = data.draw(S)
     shapes = [np.shape(xx) for xx in X]
@@ -449,8 +473,9 @@ def test_shapes_gufunc_args(parsed_sig_and_size, dtype, unique, data):
     validate_elements(X, dtype=dtype, unique=unique)
 
 
-@given(parsed_sigs(big=False), integers(0, 5), integers(0, 5),
-       real_scalar_dtypes(), data())
+@given(
+    parsed_sigs(big=False), integers(0, 5), integers(0, 5), real_scalar_dtypes(), data()
+)
 def test_elements_gufunc_args(parsed_sig, min_side, max_side, dtype, data):
     choices = data.draw(real_from_dtype(dtype))
     elements = sampled_from(choices)
@@ -459,19 +484,23 @@ def test_elements_gufunc_args(parsed_sig, min_side, max_side, dtype, data):
 
     min_side, max_side = sorted([min_side, max_side])
 
-    S = gu.gufunc_args(signature, min_side=min_side, max_side=max_side,
-                       dtype=dtype, elements=elements)
+    S = gu.gufunc_args(
+        signature, min_side=min_side, max_side=max_side, dtype=dtype, elements=elements
+    )
 
     X = data.draw(S)
 
     validate_elements(X, choices=choices, dtype=dtype)
 
 
-@given(gu.gufunc_args('(n),(m),(n,m),(n)->()',
-                      dtype=['object', int, bool, int],
-                      elements=[_st_shape, integers(0, 100),
-                                booleans(), integers(0, 100)],
-                      min_side={'n': 1}))  # always at least one arg
+@given(
+    gu.gufunc_args(
+        "(n),(m),(n,m),(n)->()",
+        dtype=["object", int, bool, int],
+        elements=[_st_shape, integers(0, 100), booleans(), integers(0, 100)],
+        min_side={"n": 1},
+    )
+)  # always at least one arg
 def test_append_bcast_dims(args):
     core_dims, b_dims, set_to_1, n_extra_per_arg = args
 
@@ -479,26 +508,23 @@ def test_append_bcast_dims(args):
     # Put all in range [0, max_extra]
     n_extra_per_arg = tuple(n_extra_per_arg % (max_extra + 1))
 
-    shapes = gu._append_bcast_dims(core_dims,
-                                   b_dims, set_to_1, n_extra_per_arg)
+    shapes = gu._append_bcast_dims(core_dims, b_dims, set_to_1, n_extra_per_arg)
 
     for ii, ss in enumerate(shapes):
-        bb = np.asarray(ss[:len(ss) - len(core_dims[ii])])
-        cc = ss[len(ss) - len(core_dims[ii]):]
+        bb = np.asarray(ss[: len(ss) - len(core_dims[ii])])
+        cc = ss[len(ss) - len(core_dims[ii]) :]
 
         st1 = set_to_1[ii]
-        st1 = st1[len(st1) - len(bb):]
+        st1 = st1[len(st1) - len(bb) :]
 
         assert len(bb) == n_extra_per_arg[ii]
         assert cc == core_dims[ii]
         assert np.all(bb[st1] == 1)
-        assert np.all(bb[~st1] == b_dims[len(b_dims) - len(bb):][~st1])
+        assert np.all(bb[~st1] == b_dims[len(b_dims) - len(bb) :][~st1])
 
 
-@given(parsed_sigs_and_sizes(big=True),
-       integers(0, gu.GLOBAL_DIMS_MAX), data())
-def test_broadcast_shapes_gufunc_arg_shapes(parsed_sig_and_size,
-                                            max_dims_extra, data):
+@given(parsed_sigs_and_sizes(big=True), integers(0, gu.GLOBAL_DIMS_MAX), data())
+def test_broadcast_shapes_gufunc_arg_shapes(parsed_sig_and_size, max_dims_extra, data):
     parsed_sig, min_side, max_side = parsed_sig_and_size
 
     signature = unparse(parsed_sig)
@@ -506,20 +532,31 @@ def test_broadcast_shapes_gufunc_arg_shapes(parsed_sig_and_size,
 
     excluded = data.draw(sets(integers(0, len(parsed_sig) - 1)).map(tuple))
 
-    S = gu.gufunc_arg_shapes(signature, excluded=excluded,
-                             min_side=min_side, max_side=max_side,
-                             max_dims_extra=max_dims_extra)
+    S = gu.gufunc_arg_shapes(
+        signature,
+        excluded=excluded,
+        min_side=min_side,
+        max_side=max_side,
+        max_dims_extra=max_dims_extra,
+    )
 
     shapes = data.draw(S)
 
-    validate_bcast_shapes(shapes, parsed_sig, excluded,
-                          min_side, max_side, max_dims_extra)
+    validate_bcast_shapes(
+        shapes, parsed_sig, excluded, min_side, max_side, max_dims_extra
+    )
 
 
-@given(parsed_sigs_and_sizes(big=False),
-       integers(0, 3), real_scalar_dtypes(), booleans(), data())
-def test_broadcast_shapes_gufunc_args(parsed_sig_and_size,
-                                      max_dims_extra, dtype, unique, data):
+@given(
+    parsed_sigs_and_sizes(big=False),
+    integers(0, 3),
+    real_scalar_dtypes(),
+    booleans(),
+    data(),
+)
+def test_broadcast_shapes_gufunc_args(
+    parsed_sig_and_size, max_dims_extra, dtype, unique, data
+):
     parsed_sig, min_side, max_side = parsed_sig_and_size
 
     signature = unparse(parsed_sig)
@@ -529,24 +566,37 @@ def test_broadcast_shapes_gufunc_args(parsed_sig_and_size,
 
     elements = from_dtype(np.dtype(dtype))
 
-    S = gu.gufunc_args(signature, excluded=excluded,
-                       min_side=min_side, max_side=max_side,
-                       max_dims_extra=max_dims_extra,
-                       dtype=dtype, elements=elements, unique=unique)
+    S = gu.gufunc_args(
+        signature,
+        excluded=excluded,
+        min_side=min_side,
+        max_side=max_side,
+        max_dims_extra=max_dims_extra,
+        dtype=dtype,
+        elements=elements,
+        unique=unique,
+    )
 
     X = data.draw(S)
     shapes = [np.shape(xx) for xx in X]
 
-    validate_bcast_shapes(shapes, parsed_sig, excluded,
-                          min_side, max_side, max_dims_extra)
+    validate_bcast_shapes(
+        shapes, parsed_sig, excluded, min_side, max_side, max_dims_extra
+    )
     validate_elements(X, dtype=dtype, unique=unique)
 
 
-@given(parsed_sigs(big=False),
-       integers(0, 5), integers(0, 5), integers(0, 3), real_scalar_dtypes(),
-       data())
-def test_broadcast_elements_gufunc_args(parsed_sig, min_side,
-                                        max_side, max_dims_extra, dtype, data):
+@given(
+    parsed_sigs(big=False),
+    integers(0, 5),
+    integers(0, 5),
+    integers(0, 3),
+    real_scalar_dtypes(),
+    data(),
+)
+def test_broadcast_elements_gufunc_args(
+    parsed_sig, min_side, max_side, max_dims_extra, dtype, data
+):
     signature = unparse(parsed_sig)
     parsed_sig, _ = parsed_sig
 
@@ -557,10 +607,15 @@ def test_broadcast_elements_gufunc_args(parsed_sig, min_side,
     choices = data.draw(real_from_dtype(dtype))
     elements = sampled_from(choices)
 
-    S = gu.gufunc_args(signature, excluded=excluded,
-                       min_side=min_side, max_side=max_side,
-                       max_dims_extra=max_dims_extra,
-                       dtype=dtype, elements=elements)
+    S = gu.gufunc_args(
+        signature,
+        excluded=excluded,
+        min_side=min_side,
+        max_side=max_side,
+        max_dims_extra=max_dims_extra,
+        dtype=dtype,
+        elements=elements,
+    )
 
     X = data.draw(S)
 
