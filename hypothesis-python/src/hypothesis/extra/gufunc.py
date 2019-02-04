@@ -5,6 +5,7 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import defaultdict
+import string
 
 import numpy as np
 import numpy.lib.function_base as npfb
@@ -37,6 +38,14 @@ DEFAULT_MAX_SIDE = 5
 # there. We should also check signature.isascii() since there are lot of weird
 # corner cases with unicode parsing, but isascii() restricts us to Py >=3.7.
 parse_gufunc_signature = npfb._parse_gufunc_signature
+
+
+def weird_digits(ss):
+    '''In Python 3, some weird unicode characters pass `isdigit` but are not
+    0-9 characters. This function detects those cases.
+    '''
+    weird = set(cc for cc in ss if cc.isdigit() and (cc not in string.digits))
+    return weird
 
 
 def check_set_like(arg, name=""):
@@ -352,6 +361,12 @@ def gufunc_arg_shapes(signature, excluded=(), min_side=0, max_side=5, max_dims_e
     order_check_min_max(min_side, max_side)
     max_dims_extra = ensure_int(max_dims_extra)
     order_check("extra dims", 0, max_dims_extra, GLOBAL_DIMS_MAX)
+
+    # Validate that the signature contains digits we can parse
+    weird_sig_digits = weird_digits(signature)
+    if len(weird_sig_digits) > 0:
+        raise InvalidArgument('signature %s contains invalid digits: %s' %
+                              (signature, ''.join(weird_sig_digits)))
 
     # Parse out the signature: e.g., parses to [('n', 'm'), ('m', 'p')]
     parsed_sig, _ = parse_gufunc_signature(signature)
