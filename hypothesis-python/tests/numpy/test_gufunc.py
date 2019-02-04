@@ -23,6 +23,7 @@ from hypothesis.strategies import (
     sampled_from,
     sets,
     tuples,
+    one_of,
 )
 
 # The spec for a dimension name in numpy.lib.function_base is r'\A\w+\Z' but
@@ -32,10 +33,6 @@ from hypothesis.strategies import (
 VALID_DIM_NAMES = r"\A[a-zA-Z_][a-zA-Z0-9_]*\Z"
 
 _st_shape = lists(integers(min_value=0, max_value=5), min_size=0, max_size=3).map(tuple)
-
-
-def identity(x):
-    return x
 
 
 def no_weird_digits(ss):
@@ -153,9 +150,8 @@ def real_scalar_dtypes():
     def cast_it(args):
         return args[0](args[1])
 
-    S = tuples(sampled_from((str, identity, to_native)), scalar_dtypes())
-    S = S.map(cast_it)
-    return S
+    dtypes = scalar_dtypes()
+    return one_of(dtypes, dtypes.map(str), dtypes.map(to_native))
 
 
 def real_from_dtype(dtype, N=10):
@@ -190,7 +186,7 @@ def parsed_sigs(big=False):
     if big:
         # Or throw in anything compatible with regex sig
         all_sigs = from_regex(npfb._SIGNATURE).filter(no_weird_digits)
-        S = S | all_sigs.map(gu.parse_gufunc_signature)
+        S |= all_sigs.map(gu.parse_gufunc_signature)
 
     return S
 

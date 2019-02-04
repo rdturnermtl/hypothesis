@@ -367,7 +367,7 @@ def gufunc_arg_shapes(signature, excluded=(), min_side=0, max_side=5, max_dims_e
     # Get core shapes before broadcasted dimensions
     shapes_st = _gufunc_arg_shapes(parsed_sig, min_side=min_side, max_side=max_side)
 
-    # Skip this bast craziness if we don't want extra dims:
+    # Skip this broadcasting craziness if we don't want extra dims:
     if max_dims_extra == 0:
         return shapes_st
 
