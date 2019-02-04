@@ -27,9 +27,16 @@ from hypothesis.strategies import (
 # as high as 32 before breaking assumptions in numpy.
 GLOBAL_DIMS_MAX = 12
 
+
 # Key used in min_side and max_side to indicate min/max on broadcasted dims,
-# using ``object()`` trick to create unique sentinel.
-BCAST_DIM = object()
+# building sentinel class so we have clean __repr__.
+class _BcastDimType(object):
+    def __repr__(self):
+        return "BCAST_DIM"
+
+
+BCAST_DIM = _BcastDimType()
+
 # Value used in default dict for max side if variable not specified
 DEFAULT_MAX_SIDE = 5
 

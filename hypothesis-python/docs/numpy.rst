@@ -30,7 +30,6 @@ follow numpy's `Generalized Universal Function API <https://docs.scipy.org/doc/n
 
 .. automodule:: hypothesis.extra.gufunc
    :members:
-   :exclude-members: check_set_like, check_valid_size_interval, order_check_min_max, ensure_int
 
 .. _hypothesis-pandas:
 
