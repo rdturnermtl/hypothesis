@@ -368,7 +368,7 @@ def test_elements_tuple_of_arrays(shapes, dtype, data):
     gu.gufunc_args(
         "(),(),(),()->()",
         dtype=["object", "object", "object", "bool"],
-        elements=[_st_shape.map(tuple.__repr__), scalar_dtypes(), just(None), booleans()],
+        elements=[_st_shape.map(str), scalar_dtypes(), just(None), booleans()],
         min_side=1,
         max_dims_extra=1,
     ),
@@ -376,17 +376,16 @@ def test_elements_tuple_of_arrays(shapes, dtype, data):
 )
 def test_bcast_tuple_of_arrays(args, data):
     """Now testing broadcasting of tuple_of_arrays, kind of crazy since it uses
-    gufuncs to test itself. Some awkwardness here since there are a lot of
-    corner cases when dealing with object types in the numpy extension.
+    gufuncs to test itself.
 
     For completeness, should probably right a function like this for the other
-    functions, but there always just pass dtype, elements, unique to
+    functions, but they always just pass dtype, elements, unique to
     `_tuple_of_arrays` anyway, so this should be pretty good.
     """
     shapes, dtype, elements, unique = args
 
-    shapes = shapes.ravel()
-
+    # Fill in a strategy for each dtype, might need to expand out to same shape
+    # as dtype.
     elements_shape = max(dtype.shape, elements.shape)
     dtype_ = np.broadcast_to(dtype, elements_shape)
     if elements_shape == ():
@@ -394,8 +393,14 @@ def test_bcast_tuple_of_arrays(args, data):
     else:
         elements = [from_dtype(dd) for dd in dtype_]
 
+    # _tuple_of_arrays does not allow shapes to be broadcasted => must be list
+    # of shape (n,) even if comes in as (),(1,), or (n,)
+    shapes = shapes.ravel()
     shapes_shape = max(shapes.shape, dtype.shape, elements_shape, unique.shape)
     shapes = np.broadcast_to(shapes, shapes_shape)
+    # We needed to convert tuple to str, so numpy would treat it as single
+    # scalar and put it as single element in away. Now we undo that. Using eval
+    # is not ideal, but this is only tests.
     shapes = [eval(ss) for ss in shapes]
 
     S = gu._tuple_of_arrays(shapes, dtype, elements=elements, unique=unique)
