@@ -322,27 +322,9 @@ def test_int_int_or_dict(default_val, default_val2):
 def test_shapes_tuple_of_arrays(shapes, dtype, unique, data):
     elements = from_dtype(np.dtype(dtype))
 
-    S = gu._tuple_of_arrays(shapes, dtype, elements=elements, unique=unique)
-    X = data.draw(S)
-
-    validate_elements(X, dtype=dtype, unique=unique)
-
-    assert len(shapes) == len(X)
-    for spec, drawn in zip(shapes, X):
-        assert tuple(spec) == np.shape(drawn)
-
-
-# hypothesis.extra.numpy.array_shapes does not support 0 min_size so we roll
-# our own in this case.
-@given(
-    lists(_st_shape, min_size=0, max_size=5), real_scalar_dtypes(), booleans(), data()
-)
-def test_just_shapes_tuple_of_arrays(shapes, dtype, unique, data):
-    elements = from_dtype(np.dtype(dtype))
-
     # test again, but this time pass in strategy to make sure it can handle it
     S = gu._tuple_of_arrays(
-        just(shapes), just(dtype), elements=elements, unique=just(unique)
+        just(shapes), dtype, elements=elements, unique=unique
     )
     X = data.draw(S)
 
@@ -358,7 +340,7 @@ def test_elements_tuple_of_arrays(shapes, dtype, data):
     choices = data.draw(real_from_dtype(dtype))
 
     elements = sampled_from(choices)
-    S = gu._tuple_of_arrays(shapes, dtype, elements=elements)
+    S = gu._tuple_of_arrays(just(shapes), dtype, elements=elements)
     X = data.draw(S)
 
     validate_elements(X, choices=choices, dtype=dtype)
@@ -403,7 +385,7 @@ def test_bcast_tuple_of_arrays(args, data):
     # is not ideal, but this is only tests.
     shapes = [eval(ss) for ss in shapes]
 
-    S = gu._tuple_of_arrays(shapes, dtype, elements=elements, unique=unique)
+    S = gu._tuple_of_arrays(just(shapes), dtype, elements=elements, unique=unique)
     X = data.draw(S)
 
     assert len(shapes) == len(X)
