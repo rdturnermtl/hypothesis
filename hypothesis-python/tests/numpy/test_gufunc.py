@@ -27,7 +27,7 @@ import numpy.lib.function_base as npfb
 import hypothesis.extra.gufunc as gu
 from hypothesis import given
 from hypothesis.errors import InvalidArgument
-from hypothesis.extra.numpy import from_dtype, scalar_dtypes
+from hypothesis.extra.numpy import from_dtype, scalar_dtypes, arrays
 from hypothesis.internal.compat import hunichr, integer_types
 from hypothesis.strategies import (
     booleans,
@@ -314,37 +314,6 @@ def test_int_int_or_dict(default_val, default_val2):
     assert DD["---"] == default_val
 
 
-@given(real_scalar_dtypes(), _st_shape, data())
-def test_arrays(dtype, shape, data):
-    # unique argument to arrays gets tested in the tuple of arrays tests
-    choices = data.draw(real_from_dtype(dtype))
-
-    elements = sampled_from(choices)
-    S = gu._arrays(dtype, shape, elements)
-    X = data.draw(S)
-
-    assert np.shape(X) == shape
-    validate_elements([X], dtype=dtype, choices=choices)
-
-    assert type(X) == np.ndarray
-
-
-@given(real_scalar_dtypes(), _st_shape, data())
-def test_just_arrays(dtype, shape, data):
-    # unique argument to arrays gets tested in the tuple of arrays tests
-    choices = data.draw(real_from_dtype(dtype))
-
-    # test again, but this time pass in strategy to make sure it can handle it
-    elements = sampled_from(choices)
-    S = gu._arrays(just(dtype), just(shape), elements)
-    X = data.draw(S)
-
-    assert np.shape(X) == shape
-    validate_elements([X], dtype=dtype, choices=choices)
-
-    assert type(X) == np.ndarray
-
-
 # hypothesis.extra.numpy.array_shapes does not support 0 min_size so we roll
 # our own in this case.
 @given(
@@ -397,9 +366,9 @@ def test_elements_tuple_of_arrays(shapes, dtype, data):
 
 @given(
     gu.gufunc_args(
-        "(1),(1),(1),()->()",
+        "(),(),(),()->()",
         dtype=["object", "object", "object", "bool"],
-        elements=[_st_shape, scalar_dtypes(), just(None), booleans()],
+        elements=[_st_shape.map(tuple.__repr__), scalar_dtypes(), just(None), booleans()],
         min_side=1,
         max_dims_extra=1,
     ),
@@ -417,9 +386,6 @@ def test_bcast_tuple_of_arrays(args, data):
     shapes, dtype, elements, unique = args
 
     shapes = shapes.ravel()
-    # Need to squeeze out due to weird behaviour of object
-    dtype = np.squeeze(dtype, -1)
-    elements = np.squeeze(elements, -1)
 
     elements_shape = max(dtype.shape, elements.shape)
     dtype_ = np.broadcast_to(dtype, elements_shape)
@@ -430,6 +396,7 @@ def test_bcast_tuple_of_arrays(args, data):
 
     shapes_shape = max(shapes.shape, dtype.shape, elements_shape, unique.shape)
     shapes = np.broadcast_to(shapes, shapes_shape)
+    shapes = [eval(ss) for ss in shapes]
 
     S = gu._tuple_of_arrays(shapes, dtype, elements=elements, unique=unique)
     X = data.draw(S)
