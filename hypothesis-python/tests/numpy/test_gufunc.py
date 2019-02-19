@@ -27,7 +27,7 @@ import numpy.lib.function_base as npfb
 import hypothesis.extra.gufunc as gu
 from hypothesis import given
 from hypothesis.errors import InvalidArgument
-from hypothesis.extra.numpy import from_dtype, scalar_dtypes, arrays
+from hypothesis.extra.numpy import from_dtype, scalar_dtypes
 from hypothesis.internal.compat import hunichr, integer_types
 from hypothesis.strategies import (
     booleans,
