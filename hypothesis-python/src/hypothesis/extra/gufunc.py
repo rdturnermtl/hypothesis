@@ -64,13 +64,12 @@ if not hasattr(npfb, "_parse_gufunc_signature"):
     raise HypothesisException("This function requires Numpy 1.12 or later.")
 
 
-# TODO ascii only
-def _weird_digits(ss):
-    """In Python 3, some weird unicode characters pass `isdigit` but are not
-    0-9 characters. This function detects those cases.
+def _isascii(ss):
+    """This function is builtin to Py >= 3.7. There are also more efficient
+    ways to do this, but it is hard to do anything much better if we want to be
+    compatible with both Py2 and Py3.
     """
-    weird = set(cc for cc in ss if cc.isdigit() and (cc not in string.digits))
-    return weird
+    return all(ord(cc) <= 127 for cc in ss)
 
 
 def _check_set_like(arg, name=""):
@@ -348,13 +347,9 @@ def gufunc_arg_shapes(signature, excluded=(), min_side=0, max_side=5, max_dims_e
     check_type(integer_types, max_dims_extra, "extra dims")
     order_check("extra dims", 0, max_dims_extra, GLOBAL_DIMS_MAX)
 
-    # Validate that the signature contains digits we can parse
-    weird_sig_digits = _weird_digits(signature)
-    if len(weird_sig_digits) > 0:
-        raise InvalidArgument(
-            "signature %s contains invalid digits: %s"
-            % (signature, "".join(weird_sig_digits))
-        )
+    if not _isascii(signature):
+        # Otherwise, there are too many issues with isdigit in unicode.
+        raise InvalidArgument("Cannot handle non-ASCII digit characters in signature=%r" % (signature,))
 
     # Parse out the signature: e.g., parses to [('n', 'm'), ('m', 'p')]. This
     # uses "private" function of numpy, but it does the job. It throws a pretty

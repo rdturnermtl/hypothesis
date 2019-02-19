@@ -28,7 +28,7 @@ import hypothesis.extra.gufunc as gu
 from hypothesis import given
 from hypothesis.errors import InvalidArgument
 from hypothesis.extra.numpy import from_dtype, scalar_dtypes, array_shapes
-from hypothesis.internal.compat import hunichr, integer_types
+from hypothesis.internal.compat import hunichr, integer_types, str_to_bytes, to_unicode
 from hypothesis.strategies import (
     booleans,
     composite,
@@ -51,11 +51,6 @@ from hypothesis.strategies import (
 VALID_DIM_NAMES = r"\A[a-zA-Z_][a-zA-Z0-9_]*\Z"
 
 _st_shape = array_shapes(min_dims=0, max_dims=3, min_side=0, max_side=5)
-
-
-def no_weird_digits(ss):
-    ok = all((not cc.isdigit()) or (cc in string.digits) for cc in ss)
-    return ok
 
 
 def pad_left(L, size, padding):
@@ -192,6 +187,16 @@ def real_from_dtype(dtype, N=10):
     return S
 
 
+@composite
+def ascii_from_regex(draw, regex_str):
+    # Use str_to_bytes, so regex knows to only generate bytes type
+    ex_str = draw(from_regex(str_to_bytes(regex_str)))
+
+    if not isinstance(ex_str, str):
+        ex_str = to_unicode(ex_str)
+    return ex_str
+
+
 def parsed_sigs(big=False):
     """Strategy to generate a parsed gufunc signature.
 
@@ -202,7 +207,7 @@ def parsed_sigs(big=False):
     max_args = 5
     # Use | to sample from digits since we would like (small) pure numbers too
     shapes = lists(
-        from_regex(VALID_DIM_NAMES) | sampled_from(string.digits),
+        ascii_from_regex(VALID_DIM_NAMES) | sampled_from(string.digits),
         min_size=0,
         max_size=max_dims,
     ).map(tuple)
@@ -211,7 +216,7 @@ def parsed_sigs(big=False):
 
     if big:
         # Or throw in anything compatible with regex sig
-        all_sigs = from_regex(npfb._SIGNATURE).filter(no_weird_digits)
+        all_sigs = ascii_from_regex(npfb._SIGNATURE)
         S |= all_sigs.map(npfb._parse_gufunc_signature)
 
     return S
@@ -272,7 +277,7 @@ def test_check_set_like():
     assertInvalidArgument(gu._check_set_like, "foobar")
 
 
-@given(dictionaries(from_regex(VALID_DIM_NAMES), integers()), integers(), integers())
+@given(dictionaries(ascii_from_regex(VALID_DIM_NAMES), integers()), integers(), integers())
 def test_ddict_int_or_dict(D, default_val, default_val2):
     DD = defaultdict(lambda: default_val, D)
 
@@ -284,7 +289,7 @@ def test_ddict_int_or_dict(D, default_val, default_val2):
     assert DD2.default_factory() == default_val
 
 
-@given(dictionaries(from_regex(VALID_DIM_NAMES), integers()), integers())
+@given(dictionaries(ascii_from_regex(VALID_DIM_NAMES), integers()), integers())
 def test_dict_int_or_dict(D, default_val):
     DD = gu._int_or_dict(D, default_val)
 
