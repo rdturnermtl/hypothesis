@@ -309,9 +309,7 @@ def test_shapes_tuple_of_arrays(shapes, dtype, unique, data):
     elements = from_dtype(np.dtype(dtype))
 
     # test again, but this time pass in strategy to make sure it can handle it
-    S = gu._tuple_of_arrays(
-        just(shapes), dtype, elements=elements, unique=unique
-    )
+    S = gu._tuple_of_arrays(just(shapes), dtype, elements=elements, unique=unique)
     X = data.draw(S)
 
     validate_elements(X, dtype=dtype, unique=unique)

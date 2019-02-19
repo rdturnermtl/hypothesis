@@ -27,7 +27,7 @@ from collections import defaultdict
 import numpy as np
 import numpy.lib.function_base as npfb
 
-from hypothesis.errors import InvalidArgument, HypothesisException
+from hypothesis.errors import HypothesisException, InvalidArgument
 from hypothesis.extra.numpy import arrays, order_check
 from hypothesis.internal.compat import integer_types
 from hypothesis.internal.validation import check_type, check_valid_bound
