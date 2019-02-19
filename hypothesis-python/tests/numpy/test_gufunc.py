@@ -212,7 +212,7 @@ def parsed_sigs(big=False):
     if big:
         # Or throw in anything compatible with regex sig
         all_sigs = from_regex(npfb._SIGNATURE).filter(no_weird_digits)
-        S |= all_sigs.map(gu.parse_gufunc_signature)
+        S |= all_sigs.map(npfb._parse_gufunc_signature)
 
     return S
 
@@ -263,20 +263,6 @@ def test_check_functions():
     assertInvalidArgument(gu.gufunc_arg_shapes, "()->()", max_dims_extra="5")
     assertInvalidArgument(gu.gufunc_arg_shapes, "()->()", max_dims_extra=-1)
     assertInvalidArgument(gu.gufunc_arg_shapes, "()->()", max_dims_extra=50)
-
-
-@given(parsed_sigs(big=True))
-def test_unparse_parse(sig):
-    i_parsed_sig, o_parsed_sig = sig
-
-    # We don't care about the output for this function
-    signature = unparse((i_parsed_sig, o_parsed_sig))
-    # This is a 'private' function of np, so need to test it still works as we
-    # think it does.
-    inp, out = gu.parse_gufunc_signature(signature)
-
-    assert i_parsed_sig == inp
-    assert o_parsed_sig == out
 
 
 def test_check_set_like():

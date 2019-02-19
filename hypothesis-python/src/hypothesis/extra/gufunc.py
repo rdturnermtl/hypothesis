@@ -60,9 +60,9 @@ BCAST_DIM = _BcastDimType()
 # Value used in default dict for max side if variable not specified
 DEFAULT_MAX_SIDE = 5
 
-# This uses "private" function of numpy, but it does the job. It throws a
-# pretty readable exception for invalid input, we don't need to add anything.
-parse_gufunc_signature = npfb._parse_gufunc_signature
+
+if not hasattr(npfb, "_parse_gufunc_signature"):
+    raise HypothesisException("This function requires Numpy 1.12 or later.")
 
 
 def _weird_digits(ss):
@@ -127,9 +127,9 @@ def _tuple_of_arrays(draw, shapes, dtype, elements, unique=False):
 
     Parameters
     ----------
-    shapes : list of tuples of int
-        List of tuples where each tuple is the shape of an argument. A
-        `SearchStrategy` for list of tuples is also supported.
+    shapes : SearchStrategy
+        The strategy should generate a list of tuples of int. Each tuple is the
+        shape of an argument.
     dtype : list-like of dtype
         List of numpy `dtype` for each argument. These can be either strings
         (``'int64'``), type (``np.int64``), or numpy `dtype`
@@ -150,8 +150,9 @@ def _tuple_of_arrays(draw, shapes, dtype, elements, unique=False):
         Resulting ndarrays with shape of `shapes` and elements from `elements`.
 
     """
-    if isinstance(shapes, SearchStrategy):
-        shapes = draw(shapes)
+    check_type(SearchStrategy, shapes, "shape strategy")
+
+    shapes = draw(shapes)
     n = len(shapes)
 
     # Need this since broadcast_to does not like vars of type type
@@ -355,8 +356,10 @@ def gufunc_arg_shapes(signature, excluded=(), min_side=0, max_side=5, max_dims_e
             % (signature, "".join(weird_sig_digits))
         )
 
-    # Parse out the signature: e.g., parses to [('n', 'm'), ('m', 'p')]
-    parsed_sig, _ = parse_gufunc_signature(signature)
+    # Parse out the signature: e.g., parses to [('n', 'm'), ('m', 'p')]. This
+    # uses "private" function of numpy, but it does the job. It throws a pretty
+    # readable exception for invalid input, we don't need to add anything.
+    parsed_sig, _ = npfb._parse_gufunc_signature(signature)
 
     # Get core shapes before broadcasted dimensions
     shapes_st = _gufunc_arg_shapes(parsed_sig, min_side=min_side, max_side=max_side)
