@@ -17,7 +17,6 @@
 
 from __future__ import absolute_import, division, print_function
 
-import string
 from collections import defaultdict
 
 import numpy as np
@@ -349,7 +348,9 @@ def gufunc_arg_shapes(signature, excluded=(), min_side=0, max_side=5, max_dims_e
 
     if not _isascii(signature):
         # Otherwise, there are too many issues with isdigit in unicode.
-        raise InvalidArgument("Cannot handle non-ASCII digit characters in signature=%r" % (signature,))
+        raise InvalidArgument(
+            "Cannot handle non-ASCII digit characters in signature=%r" % (signature,)
+        )
 
     # Parse out the signature: e.g., parses to [('n', 'm'), ('m', 'p')]. This
     # uses "private" function of numpy, but it does the job. It throws a pretty

@@ -27,7 +27,7 @@ import numpy.lib.function_base as npfb
 import hypothesis.extra.gufunc as gu
 from hypothesis import given
 from hypothesis.errors import InvalidArgument
-from hypothesis.extra.numpy import from_dtype, scalar_dtypes, array_shapes
+from hypothesis.extra.numpy import array_shapes, from_dtype, scalar_dtypes
 from hypothesis.internal.compat import hunichr, integer_types, str_to_bytes, to_unicode
 from hypothesis.strategies import (
     booleans,
@@ -192,6 +192,8 @@ def ascii_from_regex(draw, regex_str):
     # Use str_to_bytes, so regex knows to only generate bytes type
     ex_str = draw(from_regex(str_to_bytes(regex_str)))
 
+    # Return str type on both py2 and py3 because the regex signature parser in
+    # numpy expects a str in both py2 and py3.
     if not isinstance(ex_str, str):
         ex_str = to_unicode(ex_str)
     return ex_str
@@ -277,7 +279,9 @@ def test_check_set_like():
     assertInvalidArgument(gu._check_set_like, "foobar")
 
 
-@given(dictionaries(ascii_from_regex(VALID_DIM_NAMES), integers()), integers(), integers())
+@given(
+    dictionaries(ascii_from_regex(VALID_DIM_NAMES), integers()), integers(), integers()
+)
 def test_ddict_int_or_dict(D, default_val, default_val2):
     DD = defaultdict(lambda: default_val, D)
 
