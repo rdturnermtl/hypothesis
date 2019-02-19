@@ -389,7 +389,10 @@ def arrays(
         shape = (shape,)
     shape = tuple(shape)
     if not shape:
-        return np.full(shape=(), fill_value=draw(elements), dtype=dtype)
+        # We use .itemset() instead of np.full because the latter cannot set tuples as elements.
+        arr = np.empty(shape=(), dtype=dtype)
+        arr.itemset(draw(elements))
+        return arr
     fill = fill_for(elements=elements, unique=unique, fill=fill)
     return draw(ArrayStrategy(elements, shape, dtype, fill, unique))
 
