@@ -15,10 +15,6 @@
 #
 # END HEADER
 
-# This module uses the numpy parser of the Generalized Universal Function API
-# signatures `_parse_gufunc_signature`, which is only available in
-# numpy>=1.12.0 and therefore requires a bump in the requirements for
-# hypothesis.
 from __future__ import absolute_import, division, print_function
 
 import string
@@ -60,11 +56,15 @@ BCAST_DIM = _BcastDimType()
 # Value used in default dict for max side if variable not specified
 DEFAULT_MAX_SIDE = 5
 
-
+# This module uses the numpy parser of the Generalized Universal Function API
+# signatures `_parse_gufunc_signature`, which is only available in
+# numpy>=1.12.0 and therefore requires a bump in the requirements for
+# hypothesis.
 if not hasattr(npfb, "_parse_gufunc_signature"):
     raise HypothesisException("This function requires Numpy 1.12 or later.")
 
 
+# TODO ascii only
 def _weird_digits(ss):
     """In Python 3, some weird unicode characters pass `isdigit` but are not
     0-9 characters. This function detects those cases.

@@ -27,7 +27,7 @@ import numpy.lib.function_base as npfb
 import hypothesis.extra.gufunc as gu
 from hypothesis import given
 from hypothesis.errors import InvalidArgument
-from hypothesis.extra.numpy import from_dtype, scalar_dtypes
+from hypothesis.extra.numpy import from_dtype, scalar_dtypes, array_shapes
 from hypothesis.internal.compat import hunichr, integer_types
 from hypothesis.strategies import (
     booleans,
@@ -50,7 +50,7 @@ from hypothesis.strategies import (
 # dimensions that blow out memory.
 VALID_DIM_NAMES = r"\A[a-zA-Z_][a-zA-Z0-9_]*\Z"
 
-_st_shape = lists(integers(min_value=0, max_value=5), min_size=0, max_size=3).map(tuple)
+_st_shape = array_shapes(min_dims=0, max_dims=3, min_side=0, max_side=5)
 
 
 def no_weird_digits(ss):
@@ -300,8 +300,6 @@ def test_int_int_or_dict(default_val, default_val2):
     assert DD["---"] == default_val
 
 
-# hypothesis.extra.numpy.array_shapes does not support 0 min_size so we roll
-# our own in this case.
 @given(
     lists(_st_shape, min_size=0, max_size=5), real_scalar_dtypes(), booleans(), data()
 )
